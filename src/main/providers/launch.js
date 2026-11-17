@@ -93,6 +93,10 @@ function resolveLaunch({
   }
   const shim = platform === 'win32' && /\.(cmd|bat)$/i.test(command);
   const mode = config.launchMode || 'auto';
+  if (shim && mode === 'direct') {
+    // Node/Electron refuse to spawn .cmd/.bat without a shell (EINVAL, CVE-2024-27980 fix).
+    throw Error('launchMode "direct" cannot start a .cmd/.bat file on Windows; use "auto" or "cmd-shim"');
+  }
   if (shim && ['auto', 'node-entry'].includes(mode)) {
     const cliPath = path.win32.join(path.win32.dirname(command), 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'cli.js');
     if (existsSync(cliPath)) {

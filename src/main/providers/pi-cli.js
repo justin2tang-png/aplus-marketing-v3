@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process');
 const os = require('node:os');
 const { resolveLaunch } = require('./launch');
+const { redactSecrets } = require('../redact');
 
 /** Build shell-free spawn options for the resolved Pi process. */
 function buildSpawnOptions(launch) {
@@ -69,6 +70,10 @@ module.exports = {
         }
       };
       const fail = message => {
+        // Fail and kill only once (e.g. many chunks after the 2 MB cap must not spawn many taskkills).
+        if (failure || done) {
+          return;
+        }
         failure = Error(message);
         kill();
       };
@@ -87,6 +92,9 @@ module.exports = {
         error ? reject(error) : resolve(result);
       };
       [child.stdout, child.stderr].forEach((stream, index) => stream.on('data', chunk => {
+        if (failure) {
+          return;
+        }
         sizes[index] += chunk.length;
         if (sizes[index] > 2 * 1024 * 1024) {
           fail('Pi output exceeds 2 MB');
@@ -98,7 +106,7 @@ module.exports = {
       child.stdin.on('error', () => {});
       child.on('close', code => {
         const text = Buffer.concat(stdout).toString('utf8');
-        const tail = Buffer.concat(stderr).toString('utf8').slice(-1000);
+        const tail = redactSecrets(Buffer.concat(stderr).toString('utf8').slice(-1000));
         if (failure || code !== 0 || !text.trim()) {
           finish(Error(`${failure?.message || (!text.trim() ? 'Pi empty output' : 'Pi failed')}; exit code ${code}: ${tail}`));
         } else {

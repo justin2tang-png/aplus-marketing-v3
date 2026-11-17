@@ -128,3 +128,35 @@ test('listSecrets masks undecryptable secrets instead of throwing', context => {
   const reader = new SettingsStore({ db: database, safeStorage: broken });
   assert.deepEqual(reader.listSecrets(), [{ name: 'openai.apiKey', masked: '•••• (cannot decrypt)' }]);
 });
+
+test('settings reject launchMode direct with a .cmd Pi path (QA P2-2)', context => {
+  const { settings } = settingsFixture(context);
+  assert.throws(() => settings.save({ 'pi.path': 'C:\\Users\\B\\AppData\\Roaming\\npm\\pi.cmd', 'pi.launchMode': 'direct' }), /direct/);
+  settings.save({ 'pi.path': 'C:\\Users\\B\\AppData\\Roaming\\npm\\pi.cmd', 'pi.launchMode': 'auto' });
+  assert.throws(() => settings.save({ 'pi.launchMode': 'direct' }), /direct/);
+  assert.equal(settings.getAll()['pi.launchMode'], 'auto');
+});
+
+test('settings allow launchMode direct with a real executable path', context => {
+  const { settings } = settingsFixture(context);
+  assert.equal(settings.save({ 'pi.path': 'C:\\tools\\pi.exe', 'pi.launchMode': 'direct' })['pi.launchMode'], 'direct');
+});
+
+test('secrets are refused when the Linux backend is basic_text (QA P2-3)', context => {
+  const { database } = settingsFixture(context);
+  const basicText = { ...safeStorage, getSelectedStorageBackend: () => 'basic_text' };
+  const store = new SettingsStore({ db: database, safeStorage: basicText });
+  assert.throws(() => store.setSecret('openai.apiKey', 'sk-test-1234567890'), /unavailable/);
+  assert.equal(store.status().encryptionAvailable, false);
+  assert.equal(store.status().backend, 'basic_text');
+  assert.equal(database.prepare('SELECT count(*) AS count FROM secrets').get().count, 0);
+});
+
+test('secrets work when getSelectedStorageBackend is absent (Windows/DPAPI) (QA P2-3)', context => {
+  const { database } = settingsFixture(context);
+  const { getSelectedStorageBackend, ...windowsLike } = safeStorage;
+  const store = new SettingsStore({ db: database, safeStorage: windowsLike });
+  store.setSecret('openai.apiKey', 'sk-test-1234567890');
+  assert.equal(store.getSecret('openai.apiKey'), 'sk-test-1234567890');
+  assert.equal(store.status().encryptionAvailable, true);
+});

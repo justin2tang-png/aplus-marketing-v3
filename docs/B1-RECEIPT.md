@@ -145,3 +145,35 @@ xvfb-run -a -s "-screen 0 1400x1000x24" npm run test:e2e
 scripts/build-win.sh
 node scripts/check-pe.js release/win-unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node
 ```
+
+## 10. QA P2 修复（2026-11-17 14:13–14:20 NZDT，依据 `/workspace/aplus-review/B1-QA.md`）
+
+手工修改，这一轮没用 Codex。
+
+| # | 修复 | 测试 |
+|---|---|---|
+| P2-1 | `pi-cli` 的 `fail()` 只生效一次（`if (failure \|\| done) return`），失败后不再处理后续数据块。超过 2 MB 只 kill／taskkill 一次 | `Pi kills the process only once…`：假 CLI 分 48 块各 64 KB 输出，统计 `ChildProcess.kill` 调用次数，期望 1。去掉修复后实测为 3，测试失败；加上修复后测试通过 |
+| P2-2 | `launchMode=direct` 配 `.cmd/.bat` 路径的组合被拦住：设置页保存时报错（按合并后的配置检查），`resolveLaunch` 在 win32 上也直接报清楚的错误，不会再走到 EINVAL | launch 2 个测试（.cmd 和 .BAT）；settings 2 个测试（拒绝 direct+.cmd；允许 direct+.exe） |
+| P2-3 | `encryptionUsable()`：`isEncryptionAvailable()` 为 true，并且 `getSelectedStorageBackend?.()` 不等于 `basic_text`，才算可用。这个函数只在 Linux 上存在，所以调用前先检查有没有、外面包了 try。设置页显示的 `encryptionAvailable` 也用同一个判断 | settings 2 个测试（basic_text 拒存，DB 里 0 行；没有该函数时视为 Windows/DPAPI，可以正常存取） |
+| P2-4 | 新增 `src/main/redact.js`，把 `sk-…`、`Bearer …`、`eyJ…` 开头的 JWT、`key/token/secret/password=` 或 `:` 后面的值替换成占位符。用在 Pi 的 stderr 尾部（会显示在 UI 上）和启动失败日志及弹窗 | redact 8 个测试；pi-cli 1 个端到端（假 CLI 往 stderr 写 key、Bearer、JWT、password，确认错误信息里只剩 `[REDACTED…]`） |
+| P2-5 | E2E 截图改写到 `test-results/e2e-screenshots/`（已 gitignore，可以用 `E2E_SCREENSHOT_DIR` 覆盖）。`docs/evidence/*.png` 保留第一次提交时那组截图，不再被测试覆盖 | 跑完 `test:e2e` 后 `git status docs/evidence` 里没有 png 改动 |
+
+真实输出：
+```
+$ npm run test:unit
+ℹ tests 138
+ℹ pass 138
+ℹ fail 0
+
+$ xvfb-run -a -s "-screen 0 1400x1000x24" npm run test:e2e
+E2E steps: 10 passed, 0 failed      # 截图在 test-results/e2e-screenshots/（6 张）
+
+$ scripts/build-win.sh   # 因为 src 有改动，重新打包
+release/APlusOperator-Setup-0.1.0.exe
+  size   122,228,890 bytes
+  sha256 e80f3b024f6150c57880278a6c6dab87ff5b1965e4ba4a52a29d2253e7ebd7c9   ← 新的；取代 §4 里的 f86ea398…36e3
+win32-x64.node sha256 2442992c…8848，PE32+ x86-64 DLL（check-pe 和 pefile 都 PASS）
+```
+日志已更新：`docs/evidence/logs/{unit-tests,e2e,build-win,installer-verify}.txt`。
+§5 到 §7 的模拟范围和风险都没变：仍然没在 Windows 上实装过，也没生成过真实的 GPT 文案。
+脱敏是尽力而为（按正则匹配），不是保证；以后接入使用 API key 的 provider，仍然要做到不在输出里打印密钥。

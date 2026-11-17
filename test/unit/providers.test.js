@@ -129,3 +129,31 @@ test('Pi rejects an already aborted request', async context => {
   controller.abort();
   await assert.rejects(piFixture(context)({}, controller.signal), /cancelled/);
 });
+
+test('Pi kills the process only once when output keeps exceeding the size limit (QA P2-1)', async context => {
+  const { ChildProcess } = require('node:child_process');
+  const originalKill = ChildProcess.prototype.kill;
+  let kills = 0;
+  ChildProcess.prototype.kill = function countingKill(...args) {
+    kills += 1;
+    return originalKill.apply(this, args);
+  };
+  context.after(() => {
+    ChildProcess.prototype.kill = originalKill;
+  });
+  await assert.rejects(piFixture(context)({
+    'pi.extraArgs': '--fake-large'
+  }), /2 MB/);
+  assert.equal(kills, 1);
+});
+
+test('Pi redacts credentials in the stderr tail shown to the user (QA P2-4)', async context => {
+  await assert.rejects(piFixture(context)({
+    'pi.extraArgs': '--fake-fail-secret'
+  }), error => {
+    assert.match(error.message, /exit code 7/);
+    assert.doesNotMatch(error.message, /sk-live-abcdefghijklmnop|eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjMifQ|s3cr3tvalue|ghp_tokenvalue123/);
+    assert.match(error.message, /\[REDACTED/);
+    return true;
+  });
+});

@@ -67,6 +67,10 @@ class SettingsStore {
         throw Error('Invalid backup keep');
       }
     }
+    const merged = { ...this.getAll(), ...patch };
+    if (merged['pi.launchMode'] === 'direct' && /\.(cmd|bat)\s*$/i.test(merged['pi.path'])) {
+      throw Error('Launch mode "direct" cannot run a .cmd/.bat Pi path (Windows EINVAL); choose "auto" or "cmd-shim"');
+    }
     const run = this.db.db || this.db;
     run.transaction(() => {
       for (const [key, value] of Object.entries(patch)) {
@@ -89,7 +93,7 @@ class SettingsStore {
     if (typeof value !== 'string' || value.length > 65536) {
       throw Error('Invalid secret value');
     }
-    if (!this.safeStorage.isEncryptionAvailable()) {
+    if (!this.encryptionUsable()) {
       throw Error('Encryption unavailable');
     }
     this.db.prepare('INSERT OR REPLACE INTO secrets VALUES (?,?,?)').run(name, this.safeStorage.encryptString(value), new Date().toISOString());
@@ -127,11 +131,34 @@ class SettingsStore {
     });
   }
 
+  /** Storage backend name; getSelectedStorageBackend exists on Linux only. */
+  backend() {
+    try {
+      if (typeof this.safeStorage.getSelectedStorageBackend === 'function') {
+        return this.safeStorage.getSelectedStorageBackend();
+      }
+    } catch {
+      // fall through
+    }
+    return process.platform === 'win32' ? 'dpapi' : 'unknown';
+  }
+
+  /**
+   * True only when secrets would really be encrypted. Linux 'basic_text' uses a hard-coded
+   * key (effectively plaintext), so it is treated as unavailable.
+   */
+  encryptionUsable() {
+    if (!this.safeStorage.isEncryptionAvailable()) {
+      return false;
+    }
+    return this.backend() !== 'basic_text';
+  }
+
   /** Report encryption availability, backend and masked secrets. */
   status() {
     return {
-      encryptionAvailable: this.safeStorage.isEncryptionAvailable(),
-      backend: this.safeStorage.getSelectedStorageBackend?.() || (process.platform === 'win32' ? 'dpapi' : 'unknown'),
+      encryptionAvailable: this.encryptionUsable(),
+      backend: this.backend(),
       names: this.listSecrets()
     };
   }

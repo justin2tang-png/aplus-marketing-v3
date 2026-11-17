@@ -14,7 +14,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const projectRoot = path.resolve(__dirname, '../..');
-const evidenceDir = path.join(projectRoot, 'docs', 'evidence');
+// Screenshots go to gitignored test-results/ so running the suite never dirties committed docs/evidence/.
+const evidenceDir = process.env.E2E_SCREENSHOT_DIR || path.join(projectRoot, 'test-results', 'e2e-screenshots');
 const topic = '首次置业 First home buyer tips & KiwiSaver';
 
 const results = [];

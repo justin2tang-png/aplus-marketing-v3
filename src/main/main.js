@@ -8,6 +8,7 @@ const { SettingsStore } = require('./settings');
 const { BackupManager } = require('./backup');
 const { registerIpc } = require('./ipc');
 const registry = require('./providers');
+const { redactSecrets } = require('./redact');
 if (process.env.APLUS_USER_DATA_DIR) {
   app.setPath('userData', process.env.APLUS_USER_DATA_DIR);
 }
@@ -87,7 +88,7 @@ if (!app.requestSingleInstanceLock()) {
   }).catch((error) => {
     // Startup errors never contain secrets (they come from DB/backup/window setup); record them
     // so a failure on Justin's/Becky's Windows PC can be diagnosed without a console window.
-    const detail = error && error.stack ? error.stack : String(error);
+    const detail = redactSecrets(error && error.stack ? error.stack : String(error));
     try {
       fs.writeFileSync(path.join(app.getPath('userData'), 'startup-error.log'), `${new Date().toISOString()}\n${detail}\n`);
     } catch {

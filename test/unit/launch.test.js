@@ -193,3 +193,17 @@ test('direct mode on Linux preserves the prompt as a plain argument', () => {
   assert.deepEqual(launch.args, buildPiArgs(config, windowsOptions.prompt));
   assert.equal(launch.env.ELECTRON_RUN_AS_NODE, undefined);
 });
+
+test('direct mode refuses a .cmd path on Windows instead of hitting EINVAL (QA P2-2)', () => {
+  assert.throws(() => resolveLaunch({
+    ...windowsOptions,
+    cfg: { ...config, launchMode: 'direct' }
+  }), /cannot start a \.cmd\/\.bat/);
+});
+
+test('direct mode refuses a .bat path on Windows (QA P2-2)', () => {
+  assert.throws(() => resolveLaunch({
+    ...windowsOptions,
+    cfg: { ...config, path: 'C:\\tools\\pi.BAT', launchMode: 'direct' }
+  }), /cannot start a \.cmd\/\.bat/);
+});
