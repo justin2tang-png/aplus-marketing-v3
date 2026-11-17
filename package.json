@@ -1,7 +1,7 @@
 {
   "name": "aplus-operator",
   "productName": "A Plus Operator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A Plus Operator — local marketing operator app (Phase B skeleton)",
   "main": "src/main/main.js",
@@ -9,9 +9,10 @@
   "author": "A Plus Finance",
   "scripts": {
     "start": "electron .",
-    "test:unit": "node --test 'test/unit/*.test.js'",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
     "test:e2e": "node test/e2e/app.e2e.js",
-    "dist:win": "electron-builder --win nsis --x64"
+    "dist:win": "electron-builder --win nsis --x64",
+    "postdist:win": "node scripts/verify-installer.js"
   },
   "dependencies": {
     "better-sqlite3": "13.2.0"
