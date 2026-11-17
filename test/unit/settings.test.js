@@ -119,3 +119,12 @@ test('secret writes fail when encryption is unavailable', context => {
   assert.throws(() => settings.setSecret('new', 'x'), /unavailable/);
   assert.equal(database.prepare('SELECT count(*) AS count FROM secrets').get().count, 0);
 });
+
+test('listSecrets masks undecryptable secrets instead of throwing', context => {
+  const { database } = settingsFixture(context);
+  const writer = new SettingsStore({ db: database, safeStorage });
+  writer.setSecret('openai.apiKey', 'sk-test-1234567890');
+  const broken = { ...safeStorage, decryptString: () => { throw new Error('DPAPI failure'); } };
+  const reader = new SettingsStore({ db: database, safeStorage: broken });
+  assert.deepEqual(reader.listSecrets(), [{ name: 'openai.apiKey', masked: '•••• (cannot decrypt)' }]);
+});

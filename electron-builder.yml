@@ -2,9 +2,17 @@ appId: nz.aplusfinance.operator
 productName: A Plus Operator
 directories:
   output: release
+# Only app code goes into app.asar (no tests, docs, logs). This app is Windows-only, so
+# ship only the win32-x64 N-API prebuild of better-sqlite3 and none of its C sources.
 files:
   - src/**
   - package.json
+  - "!node_modules/better-sqlite3/deps/**"
+  - "!node_modules/better-sqlite3/src/**"
+  - "!node_modules/better-sqlite3/prebuilds/darwin-*.node"
+  - "!node_modules/better-sqlite3/prebuilds/linux-*.node"
+  - "!node_modules/better-sqlite3/prebuilds/linuxmusl-*.node"
+  - "!node_modules/better-sqlite3/prebuilds/win32-arm64.node"
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**
@@ -15,14 +23,6 @@ win:
     - target: nsis
       arch: [x64]
   signAndEditExecutable: false
-  # Ship only the win32-x64 N-API prebuild of better-sqlite3 (plus no C sources).
-  files:
-    - "!node_modules/better-sqlite3/deps/**"
-    - "!node_modules/better-sqlite3/src/**"
-    - "!node_modules/better-sqlite3/prebuilds/darwin-*.node"
-    - "!node_modules/better-sqlite3/prebuilds/linux-*.node"
-    - "!node_modules/better-sqlite3/prebuilds/linuxmusl-*.node"
-    - "!node_modules/better-sqlite3/prebuilds/win32-arm64.node"
 nsis:
   oneClick: false
   perMachine: false

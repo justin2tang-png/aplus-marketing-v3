@@ -113,7 +113,13 @@ class SettingsStore {
     return this.db.prepare('SELECT name FROM secrets ORDER BY name').all().map(({
       name
     }) => {
-      const value = this.getSecret(name);
+      let value;
+      try {
+        value = this.getSecret(name);
+      } catch {
+        // e.g. DPAPI blob created under another Windows user; never expose ciphertext.
+        return { name, masked: '•••• (cannot decrypt)' };
+      }
       return {
         name,
         masked: '••••' + (value.length >= 8 ? value.slice(-4) : '')

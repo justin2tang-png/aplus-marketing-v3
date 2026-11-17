@@ -1,0 +1,16 @@
+
+> aplus-operator@0.1.0 test:e2e
+> node test/e2e/app.e2e.js
+
+E2E (Linux/xvfb, simulated providers)
+  ok   - A1 app opens on Create screen
+  ok   - A2 automatic backup created on first start
+  ok   - A3 switch provider to mock in Settings and save
+  ok   - A4 enter topic and generate copy
+  ok   - A5 review/edit title and body, save to library
+  ok   - A6 library lists the saved item; open and edit it (status approved)
+  ok   - A7 quit and relaunch the app with the same userData
+  ok   - A8 content persists after restart (title, body, status)
+  ok   - B1 configure pi-cli provider with fake Pi CLI path (direct, stdin)
+  ok   - B2 generate through spawned fake Pi; prompt (incl. Chinese) delivered via stdin
+E2E steps: 10 passed, 0 failed

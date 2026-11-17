@@ -1,0 +1,35 @@
+# Installer verification 2026-11-17 14:09 NZDT
+## scripts/check-pe.js
+PASS: PE32+ x86-64 DLL
+## pefile via pip (independent check; 'file' command unavailable on box: apt mirror unreachable)
+machine 0x8664 (0x8664 = x86-64)  optional-header magic 0x20b (0x20b = PE32+)  is_dll True
+imports ['KERNEL32.dll']
+exports ['napi_register_module_v1', 'node_api_module_get_api_version_v1']
+## native modules in win-unpacked
+release/win-unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node
+## sha256 / size
+2442992c114c9dcaa299c2495370f09a890e02706e96c642f9f8d61ce2998848  release/win-unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node
+f86ea39888a54dc9b0ea1a1e2aab89586a5b9890b86e5f1bb27a0230eebf36e3  release/APlusOperator-Setup-0.1.0.exe
+122228099 bytes release/APlusOperator-Setup-0.1.0.exe
+## installer PE header
+machine 0x14c magic 0x10b is_exe True (NSIS stub is 32-bit x86; payload is x64 app)
+## app.asar (non node_modules entries)
+/package.json
+/src
+/src/main
+/src/main/backup.js
+/src/main/db.js
+/src/main/ipc.js
+/src/main/main.js
+/src/main/preload.js
+/src/main/prompt.js
+/src/main/providers
+/src/main/providers/index.js
+/src/main/providers/launch.js
+/src/main/providers/mock.js
+/src/main/providers/pi-cli.js
+/src/main/settings.js
+/src/renderer
+/src/renderer/app.js
+/src/renderer/index.html
+/src/renderer/styles.css

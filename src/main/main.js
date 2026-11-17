@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { openDatabase } = require('./db');
@@ -84,8 +84,17 @@ if (!app.requestSingleInstanceLock()) {
         createWindow();
       }
     });
-  }).catch(() => {
-    console.error('Application startup failed');
+  }).catch((error) => {
+    // Startup errors never contain secrets (they come from DB/backup/window setup); record them
+    // so a failure on Justin's/Becky's Windows PC can be diagnosed without a console window.
+    const detail = error && error.stack ? error.stack : String(error);
+    try {
+      fs.writeFileSync(path.join(app.getPath('userData'), 'startup-error.log'), `${new Date().toISOString()}\n${detail}\n`);
+    } catch {
+      // ignore: userData may be the thing that failed
+    }
+    console.error('Application startup failed:', detail);
+    dialog.showErrorBox('A Plus Operator 启动失败 / failed to start', detail.slice(0, 2000));
     app.exit(1);
   });
   app.on('window-all-closed', () => {
