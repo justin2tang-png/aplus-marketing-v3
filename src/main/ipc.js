@@ -1,20 +1,127 @@
 'use strict';
-const {buildCopyPrompt,parseCopyOutput}=require('./prompt');
-function registerIpc({ipcMain,repo,settings,backup,registry,app,window}) {
- const str=(v,name,max=10000)=>{if(typeof v!=='string'||v.length>max)throw Error(`Invalid ${name}`);return v;};
- const obj=v=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Invalid object');return v;};
- const id=v=>{if(!Number.isSafeInteger(v)||v<1)throw Error('Invalid id');return v;};
- const content=v=>{obj(v);const out={};for(const [k,value]of Object.entries(v)){if(!['topic','title','body','platform','status','provider','model'].includes(k))throw Error('Invalid content field');out[k]=str(value,k,k==='body'?200000:1000);}if(out.status&&!['draft','approved'].includes(out.status))throw Error('Invalid status');return out;};
- const handlers={
- 'content:list':v=>repo.listContents(v===undefined?{}:{search:str(obj(v).search??'','search',1000)}),
- 'content:get':v=>repo.getContent(id(v)), 'content:create':v=>repo.createContent(content(v)),
- 'content:update':v=>{obj(v);return repo.updateContent(id(v.id),content(v.patch));},'content:delete':v=>repo.deleteContent(id(v)),
- 'ai:providers':()=>registry.list(), 'ai:generate':async v=>{obj(v);const topic=str(v.topic,'topic',10000);if(!topic.trim())throw Error('Topic is required');const platform=str(v.platform,'platform',100);const tone=str(v.tone,'tone',100);const cfg=settings.getAll();const provider=registry.get(cfg['ai.provider']);const result=await provider.generate({prompt:buildCopyPrompt({topic,platform,tone,brandName:cfg['brand.name']}),topic,settings:cfg});return {...parseCopyOutput(result.text,topic),provider:provider.id,model:result.model};},
- 'settings:get':()=>settings.getAll(),'settings:save':v=>{obj(v);if(v['ai.provider'])registry.get(v['ai.provider']);const saved=settings.save(v);backup.keep=saved['backup.keep'];return saved;},
- 'secrets:set':v=>{obj(v);settings.setSecret(v.name,v.value);return settings.status();},'secrets:clear':v=>{obj(v);settings.clearSecret(v.name);return settings.status();},'secrets:status':()=>settings.status(),
- 'backup:status':()=>backup.status(),'backup:now':()=>backup.runBackup(),
- 'app:info':()=>({version:app.getVersion(),userData:app.getPath('userData'),platform:process.platform})};
- for(const [channel,handler]of Object.entries(handlers))ipcMain.handle(channel,(event,value)=>{if(window && (event.sender!==window.webContents || event.senderFrame!==window.webContents.mainFrame))throw Error('Untrusted IPC sender');return handler(value);});
- return ()=>Object.keys(handlers).forEach(c=>ipcMain.removeHandler(c));
+
+const { buildCopyPrompt, parseCopyOutput } = require('./prompt');
+
+/** Register validated handlers for the renderer IPC API. */
+function registerIpc({
+  ipcMain,
+  repo: repository,
+  settings,
+  backup,
+  registry,
+  app,
+  window
+}) {
+  const validateString = (value, name, max = 10000) => {
+    if (typeof value !== 'string' || value.length > max) {
+      throw Error(`Invalid ${name}`);
+    }
+    return value;
+  };
+  const validateObject = value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw Error('Invalid object');
+    }
+    return value;
+  };
+  const validateId = value => {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw Error('Invalid id');
+    }
+    return value;
+  };
+  const validateContent = value => {
+    validateObject(value);
+    const result = {};
+    for (const [key, fieldValue] of Object.entries(value)) {
+      if (!['topic', 'title', 'body', 'platform', 'status', 'provider', 'model'].includes(key)) {
+        throw Error('Invalid content field');
+      }
+      result[key] = validateString(fieldValue, key, key === 'body' ? 200000 : 1000);
+    }
+    if (result.status && !['draft', 'approved'].includes(result.status)) {
+      throw Error('Invalid status');
+    }
+    return result;
+  };
+  const handlers = {
+    'content:list': value => repository.listContents(value === undefined ? {} : {
+      search: validateString(validateObject(value).search ?? '', 'search', 1000)
+    }),
+    'content:get': value => repository.getContent(validateId(value)),
+    'content:create': value => repository.createContent(validateContent(value)),
+    'content:update': value => {
+      validateObject(value);
+      return repository.updateContent(validateId(value.id), validateContent(value.patch));
+    },
+    'content:delete': value => repository.deleteContent(validateId(value)),
+    'ai:providers': () => registry.list(),
+    'ai:generate': async value => {
+      validateObject(value);
+      const topic = validateString(value.topic, 'topic', 10000);
+      if (!topic.trim()) {
+        throw Error('Topic is required');
+      }
+      const platform = validateString(value.platform, 'platform', 100);
+      const tone = validateString(value.tone, 'tone', 100);
+      const config = settings.getAll();
+      const provider = registry.get(config['ai.provider']);
+      const result = await provider.generate({
+        prompt: buildCopyPrompt({
+          topic,
+          platform,
+          tone,
+          brandName: config['brand.name']
+        }),
+        topic,
+        settings: config
+      });
+      return {
+        ...parseCopyOutput(result.text, topic),
+        provider: provider.id,
+        model: result.model
+      };
+    },
+    'settings:get': () => settings.getAll(),
+    'settings:save': value => {
+      validateObject(value);
+      if (value['ai.provider']) {
+        registry.get(value['ai.provider']);
+      }
+      const saved = settings.save(value);
+      backup.keep = saved['backup.keep'];
+      return saved;
+    },
+    'secrets:set': value => {
+      validateObject(value);
+      settings.setSecret(value.name, value.value);
+      return settings.status();
+    },
+    'secrets:clear': value => {
+      validateObject(value);
+      settings.clearSecret(value.name);
+      return settings.status();
+    },
+    'secrets:status': () => settings.status(),
+    'backup:status': () => backup.status(),
+    'backup:now': () => backup.runBackup(),
+    'app:info': () => ({
+      version: app.getVersion(),
+      userData: app.getPath('userData'),
+      platform: process.platform
+    })
+  };
+  for (const [channel, handler] of Object.entries(handlers)) {
+    ipcMain.handle(channel, (event, value) => {
+      if (window && (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame)) {
+        throw Error('Untrusted IPC sender');
+      }
+      return handler(value);
+    });
+  }
+  return () => Object.keys(handlers).forEach(c => ipcMain.removeHandler(c));
 }
-module.exports={registerIpc};
+
+module.exports = {
+  registerIpc
+};

@@ -9,7 +9,7 @@
   "author": "A Plus Finance",
   "scripts": {
     "start": "electron .",
-    "test:unit": "node --test test/unit",
+    "test:unit": "node --test 'test/unit/*.test.js'",
     "test:e2e": "node test/e2e/app.e2e.js",
     "dist:win": "electron-builder --win nsis --x64"
   },

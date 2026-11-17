@@ -1,6 +1,188 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width, initial-scale=1"><title>A Plus Operator</title><link rel="stylesheet" href="styles.css"></head>
-<body><aside><h1>A Plus Operator</h1><nav><button data-tab="create">生成 Create</button><button data-tab="library">内容库 Library</button><button data-tab="settings">设置 Settings</button></nav></aside><main><div id="error" role="alert"></div><div id="toast" role="status"></div>
-<section id="create"><h2>生成 Create</h2><div class="card"><label>主题 Topic<input id="topic"></label><label>平台 Platform<select id="platform"><option>Facebook</option><option>Instagram</option><option>LinkedIn</option></select></label><label>语气 Tone<select id="tone"><option>Friendly professional</option><option>Informative</option><option>Warm and approachable</option></select></label><button id="generate">生成 Generate</button><span id="spinner" hidden>◌ Generating…</span></div><div id="draft" class="card" hidden><p id="provider-badge"></p><label>标题 Title<input id="draft-title"></label><label>正文 Body<textarea id="draft-body"></textarea></label><button id="save-draft">保存到内容库</button><button id="regenerate">重新生成 Regenerate</button></div></section>
-<section id="library" hidden><h2>内容库 Library</h2><label>搜索 Search<input id="search"></label><div id="library-list"></div><div id="editor" class="card" hidden><label>标题 Title<input id="edit-title"></label><label>正文 Body<textarea id="edit-body"></textarea></label><label>状态 Status<select id="edit-status"><option value="draft">草稿 Draft</option><option value="approved">已批准 Approved</option></select></label><button id="save-edit">保存 Save</button><button id="delete-item">删除 Delete</button></div></section>
-<section id="settings" hidden><h2>设置 Settings</h2><div class="card"><label>AI 提供商 Provider<select id="ai-provider"></select></label><label>Pi 路径 Path<input id="pi-path"></label><label>Pi Provider<input id="pi-provider"></label><label>Pi Model<input id="pi-model"></label><label>Thinking<select id="pi-thinking"><option>off</option><option>minimal</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option></select></label><label>超时 Timeout (seconds)<input id="pi-timeout" type="number" min="10" max="1800"></label><label>Launch mode<select id="pi-launch-mode"><option>auto</option><option>node-entry</option><option>cmd-shim</option><option>direct</option></select></label><label>Prompt via<select id="pi-prompt-via"><option>stdin</option><option>arg</option></select></label><label>Extra arguments<input id="pi-extra-args"></label><label>品牌 Brand<input id="brand-name"></label><label>保留备份 Backup keep<input id="backup-keep" type="number" min="1" max="60"></label><button id="save-settings">保存设置 Save settings</button></div><div class="card"><h3>密钥 Secrets</h3><p>Pi uses its own login. openai.apiKey is reserved for a future provider.</p><p id="encryption-status"></p><label>Name<input id="secret-name" value="openai.apiKey"></label><label>Value<input id="secret-value" type="password" autocomplete="off"></label><button id="save-secret">保存密钥 Save secret</button><div id="secret-list"></div></div><div class="card"><h3>备份 Backups</h3><p id="backup-status"></p><button id="backup-now">立即备份 Back up now</button></div></section></main><script src="app.js"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>A Plus Operator</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <aside>
+      <h1>A Plus Operator</h1>
+      <nav>
+        <button data-tab="create">生成 Create</button>
+        <button data-tab="library">内容库 Library</button>
+        <button data-tab="settings">设置 Settings</button>
+      </nav>
+    </aside>
+    <main>
+      <div id="error" role="alert">
+      </div>
+      <div id="toast" role="status">
+      </div>
+      <section id="create">
+        <h2>生成 Create</h2>
+        <div class="card">
+          <label>
+            主题 Topic
+            <input id="topic">
+          </label>
+          <label>
+            平台 Platform
+            <select id="platform">
+              <option>Facebook</option>
+              <option>Instagram</option>
+              <option>LinkedIn</option>
+            </select>
+          </label>
+          <label>
+            语气 Tone
+            <select id="tone">
+              <option>Friendly professional</option>
+              <option>Informative</option>
+              <option>Warm and approachable</option>
+            </select>
+          </label>
+          <button id="generate">生成 Generate</button>
+          <span id="spinner" hidden>◌ Generating…</span>
+        </div>
+        <div id="draft" class="card" hidden>
+          <p id="provider-badge">
+          </p>
+          <label>
+            标题 Title
+            <input id="draft-title">
+          </label>
+          <label>
+            正文 Body
+            <textarea id="draft-body">
+            </textarea>
+          </label>
+          <button id="save-draft">保存到内容库</button>
+          <button id="regenerate">重新生成 Regenerate</button>
+        </div>
+      </section>
+      <section id="library" hidden>
+        <h2>内容库 Library</h2>
+        <label>
+          搜索 Search
+          <input id="search">
+        </label>
+        <div id="library-list">
+        </div>
+        <div id="editor" class="card" hidden>
+          <label>
+            标题 Title
+            <input id="edit-title">
+          </label>
+          <label>
+            正文 Body
+            <textarea id="edit-body">
+            </textarea>
+          </label>
+          <label>
+            状态 Status
+            <select id="edit-status">
+              <option value="draft">草稿 Draft</option>
+              <option value="approved">已批准 Approved</option>
+            </select>
+          </label>
+          <button id="save-edit">保存 Save</button>
+          <button id="delete-item">删除 Delete</button>
+        </div>
+      </section>
+      <section id="settings" hidden>
+        <h2>设置 Settings</h2>
+        <div class="card">
+          <label>
+            AI 提供商 Provider
+            <select id="ai-provider">
+            </select>
+          </label>
+          <label>
+            Pi 路径 Path
+            <input id="pi-path">
+          </label>
+          <label>
+            Pi Provider
+            <input id="pi-provider">
+          </label>
+          <label>
+            Pi Model
+            <input id="pi-model">
+          </label>
+          <label>
+            Thinking
+            <select id="pi-thinking">
+              <option>off</option>
+              <option>minimal</option>
+              <option>low</option>
+              <option>medium</option>
+              <option>high</option>
+              <option>xhigh</option>
+            </select>
+          </label>
+          <label>
+            超时 Timeout (seconds)
+            <input id="pi-timeout" type="number" min="10" max="1800">
+          </label>
+          <label>
+            Launch mode
+            <select id="pi-launch-mode">
+              <option>auto</option>
+              <option>node-entry</option>
+              <option>cmd-shim</option>
+              <option>direct</option>
+            </select>
+          </label>
+          <label>
+            Prompt via
+            <select id="pi-prompt-via">
+              <option>stdin</option>
+              <option>arg</option>
+            </select>
+          </label>
+          <label>
+            Extra arguments
+            <input id="pi-extra-args">
+          </label>
+          <label>
+            品牌 Brand
+            <input id="brand-name">
+          </label>
+          <label>
+            保留备份 Backup keep
+            <input id="backup-keep" type="number" min="1" max="60">
+          </label>
+          <button id="save-settings">保存设置 Save settings</button>
+        </div>
+        <div class="card">
+          <h3>密钥 Secrets</h3>
+          <p>Pi uses its own login. openai.apiKey is reserved for a future provider.</p>
+          <p id="encryption-status">
+          </p>
+          <label>
+            Name
+            <input id="secret-name" value="openai.apiKey">
+          </label>
+          <label>
+            Value
+            <input id="secret-value" type="password" autocomplete="off">
+          </label>
+          <button id="save-secret">保存密钥 Save secret</button>
+          <div id="secret-list">
+          </div>
+        </div>
+        <div class="card">
+          <h3>备份 Backups</h3>
+          <p id="backup-status">
+          </p>
+          <button id="backup-now">立即备份 Back up now</button>
+        </div>
+      </section>
+    </main>
+    <script src="app.js">
+    </script>
+  </body>
+</html>
