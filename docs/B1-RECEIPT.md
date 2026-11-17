@@ -212,3 +212,31 @@ release/APlusOperator-Setup-0.1.0.exe
 win32-x64.node sha256 2442992c…8848，PE32+ x86-64 DLL（check-pe 和 pefile 都 PASS）
 ```
 仍然没验证：Windows 上 node-entry（`ELECTRON_RUN_AS_NODE` 方式跑 Pi 1.3.0 的 bundle）还没实测过。Justin 装好后，在设置页点「检查 Check」，应该看到 `node-entry (cmd-shim-parse)`，然后生成一篇，确认 Last run 显示 exit 0。如果 node-entry 失败，把 launch mode 改成 `cmd-shim`，这条路径已经在他机器上用 B1 默认参数验证过。
+
+## 12. 工程负责人复审 P2：E-3、E-1（2026-11-17 14:33–14:40 NZDT，依据 `/workspace/aplus-review/B1-ENG-REVIEW.md`）
+
+> ⚠️ **这两项修复是在验收安装包之后做的，不包含在验收包里。**
+> 交给 Justin 验收的仍然是 `release/APlusOperator-Setup-0.1.0.exe`，sha256 `ad5c5957ee0e7dc872f6573277af78799cd7af29cca9053e6fe11fad080e56ee`，来自 commit `cb3b1cc`。这次**没有重新打包**，这个文件也没动过（改完后重新核对 sha256 一致，mtime 仍是 14:21:15 NZDT）。`docs/evidence/logs/build-win.txt` 和 `installer-verify.txt` 记录的仍是那次构建。
+
+手工修改，没用 Codex。
+
+| # | 修复 | 测试 |
+|---|---|---|
+| E-3 | `SettingsStore.getAll()`：某一行 JSON 解析失败，或解析出来的类型和默认值不一致时，这个 key 用默认值，其他 key 照常读取，app 照常启动。同时 `logger.warn` 一条警告：只写 key 和错误类型，经过 `redactSecrets`，不记录存储的原始值。logger 可以注入，默认是 console。下次保存这个 key 会覆盖修复坏行 | settings +3：坏 JSON 回退为默认值且只有 1 条警告、警告里不含原值；类型不对时回退；保存后修好 |
+| E-1 | `validateExtraArgs`：额外参数（按 `=` 前的部分，不分大小写）拒绝会覆盖或否定固定安全参数的写法，以及注入输入的写法：`--print/-p/--mode`、`--tools/-t/--no-tools/-nt/--no-builtin-tools`、`--extension(s)/-e/--no-extensions/-ne`、`--skill(s)/--no-skills/-ns`、`--context-files/--no-context-files/-nc`、`--session/--session-dir/--no-session/--continue/-c/--resume/-r/--fork/--export`、`--provider/--model/--models/--thinking/--api-key`、`--system-prompt/--append-system-prompt/--prompt-template(s)/-np`、单独的 `--`、以 `@` 开头的文件参数。`=value` 形式（如 `-e=./x.js`、`--no-session=false`）同样拒绝。检查两次：**设置页保存时**，以及 **provider 每次构建参数时**（`buildPiArgs`，诊断面板也会显示这个错误）| 新增 `test/unit/extra-args.test.js`：28 种拒绝写法（每种都分别在 validate 和 buildPiArgs 上验证）、6 种允许写法、保存被拒时保留原值、库里已有的坏 extraArgs 也会被 provider 拒绝不启动、诊断显示错误 |
+
+E-1 没做的部分：复审还建议「`pi.path` 只接受以 pi.cmd / pi.exe / pi 结尾的路径」。这次任务只要求处理 extraArgs，所以这条**没做**，留给 B2。
+
+真实输出：
+```
+$ npm run test:unit
+ℹ tests 197
+ℹ pass 197
+ℹ fail 0
+
+$ xvfb-run -a -s "-screen 0 1400x1000x24" npm run test:e2e
+E2E steps: 11 passed, 0 failed
+
+$ sha256sum release/APlusOperator-Setup-0.1.0.exe    # 验收包，未重建
+ad5c5957ee0e7dc872f6573277af78799cd7af29cca9053e6fe11fad080e56ee
+```

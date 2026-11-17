@@ -1,6 +1,8 @@
 'use strict';
 
 const path = require('node:path');
+const { splitExtraArgs, validateExtraArgs } = require('./providers/launch');
+const { redactSecrets } = require('./redact');
 const defaults = {
   'ai.provider': 'pi-cli',
   'pi.path': process.platform === 'win32' ? path.win32.join(process.env.APPDATA || '', 'npm', 'pi.cmd') : 'pi',
@@ -26,10 +28,12 @@ class SettingsStore {
   /** Use the injected database and encryption backend. */
   constructor({
     db,
-    safeStorage
+    safeStorage,
+    logger = console
   }) {
     this.db = db;
     this.safeStorage = safeStorage;
+    this.logger = logger;
   }
 
   /** Merge persisted settings with application defaults. */
@@ -38,9 +42,23 @@ class SettingsStore {
       ...defaults
     };
     for (const row of this.db.prepare('SELECT * FROM settings').all()) {
-      if (Object.hasOwn(defaults, row.key)) {
-        result[row.key] = JSON.parse(row.value);
+      if (!Object.hasOwn(defaults, row.key)) {
+        continue;
       }
+      // A corrupt row must not stop the app: keep the default for that key and warn
+      // (key + reason only, redacted; the stored value itself is never logged).
+      let value;
+      try {
+        value = JSON.parse(row.value);
+      } catch (error) {
+        this.logger.warn(redactSecrets(`settings: ignoring corrupt value for "${row.key}" (${error.name}); using default`));
+        continue;
+      }
+      if (typeof value !== typeof defaults[row.key]) {
+        this.logger.warn(redactSecrets(`settings: ignoring wrong-type value for "${row.key}"; using default`));
+        continue;
+      }
+      result[row.key] = value;
     }
     return result;
   }
@@ -66,6 +84,9 @@ class SettingsStore {
       if (key === 'backup.keep' && (!Number.isInteger(value) || value < 1 || value > 60)) {
         throw Error('Invalid backup keep');
       }
+    }
+    if (Object.hasOwn(patch, 'pi.extraArgs')) {
+      validateExtraArgs(splitExtraArgs(patch['pi.extraArgs']));
     }
     const merged = { ...this.getAll(), ...patch };
     if (merged['pi.launchMode'] === 'direct' && /\.(cmd|bat)\s*$/i.test(merged['pi.path'])) {

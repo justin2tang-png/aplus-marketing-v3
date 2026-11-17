@@ -42,6 +42,38 @@ function splitExtraArgs(value = '') {
   return args;
 }
 
+/**
+ * Flags that extra arguments may not set: they would undo the fixed safety flags
+ * (--print/--no-tools/--no-extensions/--no-skills/--no-context-files/--no-session) or
+ * override provider/model/thinking/system prompt, sessions, files or output mode.
+ * Compared case-insensitively on the part before any `=`.
+ */
+const FORBIDDEN_EXTRA_FLAGS = new Set([
+  '--print', '-p', '--mode',
+  '--tools', '-t', '--no-tools', '-nt', '--no-builtin-tools', '-nbt',
+  '--extension', '--extensions', '-e', '--no-extensions', '-ne',
+  '--skill', '--skills', '--no-skills', '-ns',
+  '--context-files', '--no-context-files', '-nc',
+  '--session', '--sessions', '--no-session', '--session-dir', '--continue', '-c', '--resume', '-r', '--fork', '--export',
+  '--provider', '--model', '--models', '--thinking', '--api-key',
+  '--system-prompt', '--append-system-prompt', '--prompt-template', '--prompt-templates', '--no-prompt-templates', '-np'
+]);
+
+/** Throw if any extra argument conflicts with the fixed Pi flags; returns the args otherwise. */
+function validateExtraArgs(args) {
+  const rejected = [];
+  for (const arg of args) {
+    const name = arg.split('=')[0].toLowerCase();
+    if (arg === '--' || FORBIDDEN_EXTRA_FLAGS.has(name) || arg.startsWith('@')) {
+      rejected.push(name || arg);
+    }
+  }
+  if (rejected.length) {
+    throw Error(`Extra arguments not allowed (they would override fixed Pi flags or add input): ${[...new Set(rejected)].join(', ')}`);
+  }
+  return args;
+}
+
 /** Build Pi arguments and append the prompt when argument delivery is selected. */
 function buildPiArgs(config, prompt) {
   const args = [
@@ -54,7 +86,7 @@ function buildPiArgs(config, prompt) {
     '--no-skills',
     '--no-context-files',
     '--no-session',
-    ...splitExtraArgs(config.extraArgs)
+    ...validateExtraArgs(splitExtraArgs(config.extraArgs))
   ];
   if (config.promptVia === 'arg') {
     args.push(prompt);
@@ -216,6 +248,8 @@ function resolveLaunch({
 
 module.exports = {
   buildPiArgs,
+  validateExtraArgs,
+  FORBIDDEN_EXTRA_FLAGS,
   parseCmdShimTarget,
   findNodeEntry,
   resolveLaunch,

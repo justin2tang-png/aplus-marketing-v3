@@ -160,3 +160,34 @@ test('secrets work when getSelectedStorageBackend is absent (Windows/DPAPI) (QA 
   assert.equal(store.getSecret('openai.apiKey'), 'sk-test-1234567890');
   assert.equal(store.status().encryptionAvailable, true);
 });
+
+test('corrupt JSON in one settings row falls back to that default and warns (E-3)', context => {
+  const { database } = settingsFixture(context);
+  const warnings = [];
+  const store = new SettingsStore({ db: database, safeStorage, logger: { warn: message => warnings.push(message) } });
+  store.save({ 'pi.model': 'gpt-6.1-sol-custom', 'pi.timeoutSec': 120 });
+  database.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('pi.timeoutSec', '{not json token=abc123');
+  const all = store.getAll();
+  assert.equal(all['pi.timeoutSec'], 360);
+  assert.equal(all['pi.model'], 'gpt-6.1-sol-custom');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /pi\.timeoutSec/);
+  assert.doesNotMatch(warnings[0], /abc123/);
+});
+
+test('wrong-type settings value falls back to default and warns (E-3)', context => {
+  const { database } = settingsFixture(context);
+  const warnings = [];
+  const store = new SettingsStore({ db: database, safeStorage, logger: { warn: message => warnings.push(message) } });
+  database.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('backup.keep', '"seven"');
+  assert.equal(store.getAll()['backup.keep'], 7);
+  assert.equal(warnings.length, 1);
+});
+
+test('saving after a corrupt row repairs it (E-3)', context => {
+  const { database } = settingsFixture(context);
+  const store = new SettingsStore({ db: database, safeStorage, logger: { warn() {} } });
+  database.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('pi.thinking', 'oops');
+  store.save({ 'pi.thinking': 'xhigh' });
+  assert.equal(store.getAll()['pi.thinking'], 'xhigh');
+});
