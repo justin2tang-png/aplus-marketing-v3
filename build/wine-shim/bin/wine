@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+'use strict';
+/*
+ * Build-time shim used ONLY when cross-building the Windows NSIS installer on Linux.
+ *
+ * electron-builder creates the NSIS uninstaller in two steps: it compiles an intermediate
+ * installer, then runs it (under Wine on Linux) so it writes `<name>__uninstaller.exe`.
+ * The box has no working Wine (apt mirror unreachable; electron-builder's portable Wine 11
+ * bundle is missing its x86_64-windows DLLs). electron-builder already ships a pure-JS
+ * alternative, UninstallerReader, which extracts the uninstaller from the intermediate
+ * installer without executing it (it is what electron-builder uses on macOS Catalina+).
+ * This shim is invoked as `wine <intermediate-installer.exe>` and calls that reader.
+ * It never runs any Windows code.
+ */
+const path = require('node:path');
+
+async function main() {
+  const installerPath = process.argv[2];
+  if (!installerPath || !installerPath.toLowerCase().endsWith('.exe')) {
+    console.error('wine-shim: expected an intermediate NSIS installer .exe path');
+    process.exit(2);
+  }
+  const projectRoot = path.resolve(__dirname, '..', '..', '..');
+  const { UninstallerReader } = require(path.join(projectRoot, 'node_modules', 'app-builder-lib', 'out', 'targets', 'nsis', 'nsisUtil.js'));
+  const uninstallerPath = path.join(path.dirname(installerPath), `${path.basename(installerPath, 'exe')}__uninstaller.exe`);
+  await UninstallerReader.exec(installerPath, uninstallerPath);
+  console.log(`wine-shim: extracted uninstaller -> ${uninstallerPath}`);
+}
+
+main().catch((error) => {
+  console.error(`wine-shim: ${error.message}`);
+  process.exit(1);
+});
