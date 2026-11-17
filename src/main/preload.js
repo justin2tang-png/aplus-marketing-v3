@@ -9,6 +9,7 @@ const channels = [
   'content:delete',
   'ai:generate',
   'ai:providers',
+  'pi:diagnostics',
   'settings:get',
   'settings:save',
   'secrets:set',

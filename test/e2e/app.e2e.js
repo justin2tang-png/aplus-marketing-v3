@@ -150,6 +150,18 @@ async function scenarioFakePi() {
       assert.ok(/not financial advice/i.test(echoed), 'compliance line missing from prompt');
       await screenshot(page, '06-pi-cli-fake-generated.png');
     });
+    await step('B3 Settings diagnostics show planned strategy and the last run (exit 0)', async () => {
+      await page.locator('[data-tab="settings"]').click();
+      await page.locator('#pi-diagnose').click();
+      const panel = page.locator('#pi-diagnostics');
+      await panel.filter({ hasText: 'exit 0' }).waitFor({ timeout: 10000 });
+      const text = await panel.textContent();
+      assert.match(text, /Planned strategy: direct/);
+      assert.match(text, /Last run: .* direct .* exit 0/);
+      assert.doesNotMatch(text, /KiwiSaver/, 'diagnostics must not contain the prompt');
+      await page.locator('#pi-diagnostics').scrollIntoViewIfNeeded();
+      await screenshot(page, '07-pi-diagnostics.png');
+    });
   } finally {
     if (session) await session.app.close().catch(() => {});
     fs.rmSync(userData, { recursive: true, force: true });

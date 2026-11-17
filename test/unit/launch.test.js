@@ -167,7 +167,7 @@ test('node-entry mode throws when cli.js is missing', () => {
       ...config,
       launchMode: 'node-entry'
     }
-  }), /Pi Node entry not found: .*cli\.js/);
+  }), /Pi Node entry not found .*cli\.js/);
 });
 test('Windows executable uses direct mode', () => {
   assert.equal(resolveLaunch({

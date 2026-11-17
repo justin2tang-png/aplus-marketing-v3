@@ -177,3 +177,38 @@ win32-x64.node sha256 2442992c…8848，PE32+ x86-64 DLL（check-pe 和 pefile �
 日志已更新：`docs/evidence/logs/{unit-tests,e2e,build-win,installer-verify}.txt`。
 §5 到 §7 的模拟范围和风险都没变：仍然没在 Windows 上实装过，也没生成过真实的 GPT 文案。
 脱敏是尽力而为（按正则匹配），不是保证；以后接入使用 API key 的 provider，仍然要做到不在输出里打印密钥。
+
+## 11. Pi 1.3.0：node-entry 入口解析（2026-11-17 14:16–14:25 NZDT）
+
+背景：Justin 的 Windows 上装的是 Pi 1.3.0，B1 默认参数通过 stdin 调用实测成功（exit 0）。但 1.3.0 的包已经改成 `@earendil-works/pi-coding-agent`，入口是 `dist\bundle\cli.js`。原先写死的 `@mariozechner\pi-coding-agent\dist\cli.js` 找不到，就会悄悄退回 cmd-shim。这次是手工修改，没用 Codex。
+
+- `launch.js` 新增 `parseCmdShimTarget(content)`：解析 npm cmd-shim。支持 `"%dp0%\…"` 和 `%~dp0\…` 两种写法，带不带引号（双引号或单引号）都行，`\` 和 `/` 都认；会跳过 `node.exe`，取最后一个 `.js/.mjs/.cjs` 目标；绝对路径和乱码一律返回 null。
+- `findNodeEntry(cmdPath)` 按顺序找入口：① 从 .cmd 里解析出的路径（相对 .cmd 所在目录，允许 `..\`，必须真实存在）→ `entrySource=cmd-shim-parse`；② 已知安装位置：`@earendil-works\pi-coding-agent\dist\bundle\cli.js`（1.3.0），再 `@mariozechner\pi-coding-agent\dist\cli.js`（0.73.x）→ `entrySource=legacy-path`；③ 都没有：auto 模式退回 cmd-shim，node-entry 模式报错，错误信息里列出试过的全部路径。
+- **记录和展示**：设置页新增「Pi 启动诊断 Launch diagnostics」卡片（IPC `pi:diagnostics`），点「检查 Check」显示按当前设置会用的 strategy、entrySource、入口路径、试过的候选路径、prompt 传法，以及本次会话最后一次实际运行的 strategy 和退出码。只显示路径和策略，不含提示词、环境变量或密钥；e2e 里断言了不含提示词。
+- **Fixture**（`test/fixtures/cmd-shims/`，`.gitattributes` 设为 `-text`，保持原始字节）：
+  - `pi-windows-real-1.3.0.cmd`：Justin 机器上的真实 pi.cmd，复制自 `/workspace/aplus-review/ref-b1/pi.cmd.txt`
+  - `pi-mariozechner.cmd`：npm 风格的旧 scope
+  - `pi-renamed-scope.cmd`：假设的改名 scope
+  - `pi-tilde-unquoted.cmd`：不带引号的 `%~dp0` 写法，入口是 `.mjs`
+  - `garbage.cmd`：乱码
+- **Electron 内置 Node 和 Pi 1.3.0 engines**：`npm view @earendil-works/pi-coding-agent@1.3.0` 显示 `engines = { node: '>=22.19.0' }`、`bin = { pi: 'dist/bundle/cli.js' }`。Electron 45.3.3 内置 Node 实测为 **24.22.3**（`ELECTRON_RUN_AS_NODE=1 electron -p process.versions.node`），满足要求。
+
+真实输出：
+```
+$ npm run test:unit
+ℹ tests 158
+ℹ pass 158
+ℹ fail 0
+  （新增 test/unit/cmd-shim.test.js：真实 1.3.0 pi.cmd 解析出 node_modules\@earendil-works\pi-coding-agent\dist\bundle\cli.js → node-entry/cmd-shim-parse；
+    改名 scope / 旧 scope / 乱码 / 读不到 shim / 只有已知路径 / 全无 → cmd-shim 兜底；node-entry 模式报错列出路径；diagnostics 不 spawn、不含 env/args）
+
+$ xvfb-run -a -s "-screen 0 1400x1000x24" npm run test:e2e
+E2E steps: 11 passed, 0 failed      # 新增 B3：设置页诊断显示 "Planned strategy: direct" 和 "Last run … direct … exit 0"
+
+$ scripts/build-win.sh
+release/APlusOperator-Setup-0.1.0.exe
+  size   122,230,513 bytes
+  sha256 ad5c5957ee0e7dc872f6573277af78799cd7af29cca9053e6fe11fad080e56ee   ← 最新；取代 §10 的 e80f3b02…d7c9
+win32-x64.node sha256 2442992c…8848，PE32+ x86-64 DLL（check-pe 和 pefile 都 PASS）
+```
+仍然没验证：Windows 上 node-entry（`ELECTRON_RUN_AS_NODE` 方式跑 Pi 1.3.0 的 bundle）还没实测过。Justin 装好后，在设置页点「检查 Check」，应该看到 `node-entry (cmd-shim-parse)`，然后生成一篇，确认 Last run 显示 exit 0。如果 node-entry 失败，把 launch mode 改成 `cmd-shim`，这条路径已经在他机器上用 B1 默认参数验证过。

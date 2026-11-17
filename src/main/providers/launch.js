@@ -72,6 +72,69 @@ function quoteForCmd(arg) {
   return `"${arg}"`.replace(/[()%!^"<>&|]/g, '^$&');
 }
 
+// Known install locations, tried after the path parsed from the shim:
+// Pi 1.3.0 (seen on Justin's Windows pi.cmd) and the older 0.73.x package.
+const KNOWN_ENTRIES = [
+  ['node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'bundle', 'cli.js'],
+  ['node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'cli.js']
+];
+
+/**
+ * Extract the JS entry path from an npm cmd-shim (.cmd) file.
+ * npm shims end with e.g. `"%_prog%"  "%dp0%\node_modules\<pkg>\dist\cli.js" %*`
+ * (older/other generators use `%~dp0\...`, quoted or unquoted). Returns the path relative to
+ * the .cmd's directory (may contain `..`), or null when nothing recognisable is found.
+ */
+function parseCmdShimTarget(content) {
+  if (typeof content !== 'string' || !content) {
+    return null;
+  }
+  const pattern = /["']?(?:%dp0%|%~dp0)[\\/]?([^"'%\r\n*<>|]+?\.(?:js|mjs|cjs))(?=["'\s]|$)/gim;
+  let last = null;
+  for (const match of content.matchAll(pattern)) {
+    last = match[1].trim();
+  }
+  if (!last || path.win32.isAbsolute(last)) {
+    return null;
+  }
+  return last.replace(/\//g, '\\');
+}
+
+/**
+ * Find Pi's JS entry for node-entry launches: first the target parsed from the .cmd shim,
+ * then known locations (Pi 1.3.0 @earendil-works bundle, legacy @mariozechner). Returns {entryPath, entrySource}
+ * or null. `tried` lists checked candidates (paths only, no secrets) for diagnostics.
+ */
+function findNodeEntry(cmdPath, { existsSync, readFileSync }) {
+  const dir = path.win32.dirname(cmdPath);
+  const tried = [];
+  let content = null;
+  try {
+    content = readFileSync(cmdPath, 'utf8');
+  } catch {
+    content = null;
+  }
+  const relative = parseCmdShimTarget(content);
+  if (relative) {
+    const parsed = path.win32.normalize(path.win32.join(dir, relative));
+    tried.push(parsed);
+    if (existsSync(parsed)) {
+      return { entryPath: parsed, entrySource: 'cmd-shim-parse', tried };
+    }
+  }
+  for (const parts of KNOWN_ENTRIES) {
+    const known = path.win32.join(dir, ...parts);
+    if (tried.includes(known)) {
+      continue;
+    }
+    tried.push(known);
+    if (existsSync(known)) {
+      return { entryPath: known, entrySource: 'legacy-path', tried };
+    }
+  }
+  return { entryPath: null, entrySource: null, tried };
+}
+
 /** Resolve the executable, arguments and environment for a Pi launch. */
 function resolveLaunch({
   cfg: config,
@@ -79,7 +142,8 @@ function resolveLaunch({
   platform = process.platform,
   env = process.env,
   execPath = process.execPath,
-  existsSync = require('node:fs').existsSync
+  existsSync = require('node:fs').existsSync,
+  readFileSync = require('node:fs').readFileSync
 }) {
   let command = config.path;
   const childEnv = {
@@ -97,23 +161,27 @@ function resolveLaunch({
     // Node/Electron refuse to spawn .cmd/.bat without a shell (EINVAL, CVE-2024-27980 fix).
     throw Error('launchMode "direct" cannot start a .cmd/.bat file on Windows; use "auto" or "cmd-shim"');
   }
+  let entryInfo = null;
   if (shim && ['auto', 'node-entry'].includes(mode)) {
-    const cliPath = path.win32.join(path.win32.dirname(command), 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'cli.js');
-    if (existsSync(cliPath)) {
+    entryInfo = findNodeEntry(command, { existsSync, readFileSync });
+    if (entryInfo.entryPath) {
       return {
         command: execPath,
-        args: [cliPath, ...buildPiArgs(config, prompt)],
+        args: [entryInfo.entryPath, ...buildPiArgs(config, prompt)],
         env: {
           ...childEnv,
           ELECTRON_RUN_AS_NODE: '1'
         },
         windowsVerbatimArguments: false,
         promptVia: config.promptVia,
-        strategy: 'node-entry'
+        strategy: 'node-entry',
+        entrySource: entryInfo.entrySource,
+        entryPath: entryInfo.entryPath,
+        tried: entryInfo.tried
       };
     }
     if (mode === 'node-entry') {
-      throw Error(`Pi Node entry not found: ${cliPath}`);
+      throw Error(`Pi Node entry not found (tried: ${entryInfo.tried.join(', ')})`);
     }
   }
   if (shim && mode !== 'direct') {
@@ -127,7 +195,10 @@ function resolveLaunch({
       env: childEnv,
       windowsVerbatimArguments: true,
       promptVia: 'stdin',
-      strategy: 'cmd-shim'
+      strategy: 'cmd-shim',
+      entrySource: null,
+      entryPath: null,
+      tried: entryInfo ? entryInfo.tried : []
     };
   }
   return {
@@ -136,12 +207,17 @@ function resolveLaunch({
     env: childEnv,
     windowsVerbatimArguments: false,
     promptVia: config.promptVia,
-    strategy: 'direct'
+    strategy: 'direct',
+    entrySource: null,
+    entryPath: null,
+    tried: []
   };
 }
 
 module.exports = {
   buildPiArgs,
+  parseCmdShimTarget,
+  findNodeEntry,
   resolveLaunch,
   quoteForCmd,
   splitExtraArgs

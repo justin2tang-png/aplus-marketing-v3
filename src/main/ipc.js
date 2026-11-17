@@ -56,6 +56,7 @@ function registerIpc({
     },
     'content:delete': value => repository.deleteContent(validateId(value)),
     'ai:providers': () => registry.list(),
+    'pi:diagnostics': () => registry.get('pi-cli').diagnostics(settings.getAll()),
     'ai:generate': async value => {
       validateObject(value);
       const topic = validateString(value.topic, 'topic', 10000);

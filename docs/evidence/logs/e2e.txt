@@ -13,4 +13,5 @@ E2E (Linux/xvfb, simulated providers)
   ok   - A8 content persists after restart (title, body, status)
   ok   - B1 configure pi-cli provider with fake Pi CLI path (direct, stdin)
   ok   - B2 generate through spawned fake Pi; prompt (incl. Chinese) delivered via stdin
-E2E steps: 10 passed, 0 failed
+  ok   - B3 Settings diagnostics show planned strategy and the last run (exit 0)
+E2E steps: 11 passed, 0 failed

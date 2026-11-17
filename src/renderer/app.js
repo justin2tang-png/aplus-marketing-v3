@@ -183,13 +183,37 @@ async function loadSettings() {
   }
   await secrets();
   await backup();
+  await piDiagnostics();
 }
+
+/** Render the Pi launch plan (strategy + entry source) and the last real run. */
+async function piDiagnostics() {
+  const { planned, lastRun } = await api('pi:diagnostics');
+  const lines = [];
+  if (planned.error) {
+    lines.push(`Planned: ERROR ${planned.error}`);
+  } else {
+    lines.push(`Planned strategy: ${planned.strategy}${planned.entrySource ? ` (${planned.entrySource})` : ''}`);
+    lines.push(`Command: ${planned.command}`);
+    if (planned.entryPath) lines.push(`Entry: ${planned.entryPath}`);
+    if (planned.tried.length) lines.push(`Checked: ${planned.tried.join(' | ')}`);
+    lines.push(`Prompt via: ${planned.promptVia}`);
+  }
+  if (lastRun) {
+    lines.push(`Last run: ${new Date(lastRun.at).toLocaleString()} · ${lastRun.strategy}${lastRun.entrySource ? ` (${lastRun.entrySource})` : ''} · exit ${lastRun.exitCode ?? 'n/a'}`);
+  } else {
+    lines.push('Last run: none this session');
+  }
+  $('pi-diagnostics').textContent = lines.join('\n');
+}
+$('pi-diagnose').onclick = action(piDiagnostics);
 $('save-settings').onclick = action(async () => {
   const values = {};
   for (const [key, id] of Object.entries(fields)) {
     values[key] = ['pi.timeoutSec', 'backup.keep'].includes(key) ? Number($(id).value) : $(id).value;
   }
   await api('settings:save', values);
+  await piDiagnostics();
   toast('设置已保存 Settings saved');
 });
 $('save-secret').onclick = action(async () => {

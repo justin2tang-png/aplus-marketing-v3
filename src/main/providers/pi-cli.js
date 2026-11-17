@@ -5,6 +5,40 @@ const os = require('node:os');
 const { resolveLaunch } = require('./launch');
 const { redactSecrets } = require('../redact');
 
+let lastLaunch = null;
+
+/** Non-secret summary of a resolved launch (strategy and paths only; never the prompt or env). */
+function describeLaunch(launch) {
+  return {
+    strategy: launch.strategy,
+    entrySource: launch.entrySource || null,
+    entryPath: launch.entryPath || null,
+    command: launch.command,
+    promptVia: launch.promptVia,
+    tried: launch.tried || []
+  };
+}
+
+/** Map `pi.*` settings to the launch config used by resolveLaunch. */
+function configFromSettings(settings) {
+  const config = {};
+  for (const key of ['path', 'provider', 'model', 'thinking', 'timeoutSec', 'launchMode', 'promptVia', 'extraArgs']) {
+    config[key] = settings[`pi.${key}`];
+  }
+  return config;
+}
+
+/** What the current settings would launch (no process is started), plus the last real run. */
+function diagnostics(settings, options = {}) {
+  let planned;
+  try {
+    planned = describeLaunch(resolveLaunch({ cfg: configFromSettings(settings), prompt: '', ...options }));
+  } catch (error) {
+    planned = { error: redactSecrets(error.message) };
+  }
+  return { planned, lastRun: lastLaunch };
+}
+
 /** Build shell-free spawn options for the resolved Pi process. */
 function buildSpawnOptions(launch) {
   return {
@@ -19,6 +53,8 @@ function buildSpawnOptions(launch) {
 
 module.exports = {
   buildSpawnOptions,
+  diagnostics,
+  describeLaunch,
   id: 'pi-cli',
   label: 'Pi Agent CLI',
 
@@ -28,10 +64,7 @@ module.exports = {
     settings,
     signal
   }) {
-    const config = {};
-    for (const key of ['path', 'provider', 'model', 'thinking', 'timeoutSec', 'launchMode', 'promptVia', 'extraArgs']) {
-      config[key] = settings[`pi.${key}`];
-    }
+    const config = configFromSettings(settings);
     return new Promise((resolve, reject) => {
       if (signal?.aborted) {
         return reject(Error('Pi cancelled'));
@@ -46,6 +79,8 @@ module.exports = {
         reject(e);
         return;
       }
+      lastLaunch = { ...describeLaunch(launch), at: new Date().toISOString(), exitCode: null };
+      const thisRun = lastLaunch;
       let child;
       try {
         child = spawn(launch.command, launch.args, buildSpawnOptions(launch));
@@ -105,6 +140,7 @@ module.exports = {
       child.on('error', e => finish(e));
       child.stdin.on('error', () => {});
       child.on('close', code => {
+        thisRun.exitCode = code;
         const text = Buffer.concat(stdout).toString('utf8');
         const tail = redactSecrets(Buffer.concat(stderr).toString('utf8').slice(-1000));
         if (failure || code !== 0 || !text.trim()) {
